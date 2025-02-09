@@ -1,0 +1,10 @@
+{
+    "watch": ["**/*"],
+    "ext": "ts,json",
+    "ignore": ["node_modules", "dist", ".git", "data"],
+    "exec": "ts-node ./server.ts",
+    "events": {
+        "restart": "echo \"[nodemon] App restarted due to changes\""
+    },
+    "delay": "500"
+} 
