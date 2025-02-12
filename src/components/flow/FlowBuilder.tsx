@@ -10,17 +10,37 @@ import ReactFlow, {
   Edge,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
+import { CreateCollectionNode, TestCollectionNode } from './nodes/ChromaDBNodes';
+
+const nodeTypes = {
+  createCollection: CreateCollectionNode,
+  testCollection: TestCollectionNode,
+};
 
 const initialNodes = [
   {
-    id: '1',
-    type: 'input',
-    data: { label: 'Start' },
+    id: 'create-collection',
+    type: 'createCollection',
+    data: { label: 'Create Collection' },
     position: { x: 250, y: 25 },
+  },
+  {
+    id: 'test-collection',
+    type: 'testCollection',
+    data: { label: 'Test Collection' },
+    position: { x: 250, y: 200 },
   },
 ];
 
-const initialEdges: Edge[] = [];
+const initialEdges: Edge[] = [
+  {
+    id: 'create-to-test',
+    source: 'create-collection',
+    target: 'test-collection',
+  },
+];
+
+const defaultViewport = { x: 0, y: 0, zoom: 0.75 };
 
 export default function FlowBuilder() {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -35,9 +55,9 @@ export default function FlowBuilder() {
     <div className="flex flex-col min-h-[calc(100vh-theme(spacing.24))] overflow-hidden">
       {/* Header Section */}
       <div className="px-8 pt-6 pb-4">
-        <h1 className="text-4xl font-medium tracking-tight text-foreground/90 mb-2">Workflows</h1>
+        <h1 className="text-4xl font-medium tracking-tight text-foreground/90 mb-2">ChromaDB Workflow</h1>
         <p className="text-lg text-foreground/70 tracking-wide">
-          Design and manage your agent workflows visually
+          Test and manage your ChromaDB collections
         </p>
       </div>
 
@@ -49,6 +69,10 @@ export default function FlowBuilder() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            nodeTypes={nodeTypes}
+            defaultViewport={defaultViewport}
+            minZoom={0.2}
+            maxZoom={4}
             fitView
           >
             <Background />

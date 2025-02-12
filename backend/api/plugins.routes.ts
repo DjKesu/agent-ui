@@ -1,11 +1,12 @@
-import { Router } from 'express';
+import express from 'express';
+import PluginDatabase from '../databases/sqlite/plugins';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs';
 
 const execAsync = promisify(exec);
-const router = Router();
+const router = express.Router();
 
 // Plugin template for reference
 const PLUGIN_TEMPLATE = {
@@ -93,22 +94,56 @@ const SAMPLE_PLUGINS = [
     }
 ];
 
-// GET /api/plugins - List all available plugins
+// Get all plugins
 router.get('/', async (req, res) => {
     try {
-        res.json({
-            success: true,
-            data: SAMPLE_PLUGINS
+        // Get installed plugins from database
+        const installedPlugins = await PluginDatabase.getInstance().getAllPlugins();
+        
+        // Combine with sample plugins and mark installed ones
+        const combinedPlugins = SAMPLE_PLUGINS.map(plugin => {
+            const installed = installedPlugins.find(p => p.id === plugin.id);
+            return {
+                ...plugin,
+                isInstalled: !!installed,
+                isActive: installed?.isActive || false
+            };
         });
+
+        res.json({ success: true, data: combinedPlugins });
     } catch (error: any) {
-        res.status(500).json({
-            success: false,
-            error: error.message || 'Failed to fetch plugins'
-        });
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 
-// GET /api/plugins/:id/status - Check installation status of a plugin
+// Get active plugins
+router.get('/active', async (req, res) => {
+    try {
+        const activePlugins = await PluginDatabase.getInstance().getActivePlugins();
+        const activePluginDetails = activePlugins.map(active => {
+            const samplePlugin = SAMPLE_PLUGINS.find(p => p.id === active.id);
+            return {
+                ...samplePlugin,
+                isInstalled: true,
+                isActive: true
+            };
+        }).filter(Boolean);
+
+        res.json({ success: true, data: activePluginDetails });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Get plugin template
+router.get('/template', (req, res) => {
+    res.json({
+        success: true,
+        data: PLUGIN_TEMPLATE
+    });
+});
+
+// Check installation status
 router.get('/:id/status', async (req, res) => {
     try {
         const plugin = SAMPLE_PLUGINS.find(p => p.id === req.params.id);
@@ -123,6 +158,7 @@ router.get('/:id/status', async (req, res) => {
             });
         }
 
+        const installedPlugin = await PluginDatabase.getInstance().getPlugin(req.params.id);
         let isInstalled = false;
         let version = null;
         let error = null;
@@ -151,12 +187,12 @@ router.get('/:id/status', async (req, res) => {
             success: true,
             data: {
                 isInstalled,
+                isActive: installedPlugin?.isActive || false,
                 version,
                 error
             }
         });
     } catch (error: any) {
-        // Don't send error status, just return not installed state
         res.json({
             success: true,
             data: {
@@ -167,199 +203,90 @@ router.get('/:id/status', async (req, res) => {
     }
 });
 
-// POST /api/plugins/python/install - Install Python dependencies
-router.post('/python/install', async (req, res) => {
+// Install plugin
+router.post('/:id/install', async (req, res) => {
     try {
-        const { dependencies } = req.body;
-        if (!dependencies || !Array.isArray(dependencies)) {
-            return res.status(400).json({
+        const plugin = SAMPLE_PLUGINS.find(p => p.id === req.params.id);
+        if (!plugin) {
+            return res.status(404).json({
                 success: false,
-                error: 'Dependencies array is required'
+                error: 'Plugin not found'
             });
         }
 
-        await execAsync(`pip install ${dependencies.join(' ')}`);
-        res.json({ success: true, message: 'Dependencies installed successfully' });
-    } catch (error: any) {
-        res.status(500).json({
-            success: false,
-            error: `Failed to install dependencies: ${error.message}`
-        });
-    }
-});
-
-// POST /api/plugins/python/uninstall - Uninstall Python dependencies
-router.post('/python/uninstall', async (req, res) => {
-    try {
-        const { dependencies } = req.body;
-        if (!dependencies || !Array.isArray(dependencies)) {
-            return res.status(400).json({
-                success: false,
-                error: 'Dependencies array is required'
-            });
-        }
-
-        // Check if dependencies are installed before trying to uninstall
-        for (const dep of dependencies) {
-            try {
-                await execAsync(`pip show ${dep}`);
-            } catch {
-                // If dependency is not found, skip it
-                continue;
-            }
-            await execAsync(`pip uninstall -y ${dep}`);
-        }
-
-        res.json({ success: true, message: 'Dependencies uninstalled successfully' });
-    } catch (error: any) {
-        // If uninstall fails, still return success but with a warning
-        res.json({
-            success: true,
-            warning: `Some dependencies may not have been fully uninstalled: ${error.message}`
-        });
-    }
-});
-
-// POST /api/plugins/npm/install - Install NPM dependencies
-router.post('/npm/install', async (req, res) => {
-    try {
-        const { dependencies } = req.body;
-        if (!dependencies || !Array.isArray(dependencies)) {
-            return res.status(400).json({
-                success: false,
-                error: 'Dependencies array is required'
-            });
-        }
-
-        await execAsync(`npm install ${dependencies.join(' ')}`);
-        res.json({ success: true, message: 'Dependencies installed successfully' });
-    } catch (error: any) {
-        res.status(500).json({
-            success: false,
-            error: `Failed to install dependencies: ${error.message}`
-        });
-    }
-});
-
-// POST /api/plugins/npm/uninstall - Uninstall NPM dependencies
-router.post('/npm/uninstall', async (req, res) => {
-    try {
-        const { dependencies } = req.body;
-        if (!dependencies || !Array.isArray(dependencies)) {
-            return res.status(400).json({
-                success: false,
-                error: 'Dependencies array is required'
-            });
-        }
-
-        await execAsync(`npm uninstall ${dependencies.join(' ')}`);
-        res.json({ success: true, message: 'Dependencies uninstalled successfully' });
-    } catch (error: any) {
-        res.status(500).json({
-            success: false,
-            error: `Failed to uninstall dependencies: ${error.message}`
-        });
-    }
-});
-
-// POST /api/plugins/custom/install - Run custom installation commands
-router.post('/custom/install', async (req, res) => {
-    try {
-        const { commands } = req.body;
-        if (!commands || !Array.isArray(commands)) {
-            return res.status(400).json({
-                success: false,
-                error: 'Commands array is required'
-            });
-        }
-
-        for (const command of commands) {
-            await execAsync(command);
-        }
-        res.json({ success: true, message: 'Custom installation completed successfully' });
-    } catch (error: any) {
-        res.status(500).json({
-            success: false,
-            error: `Failed to run custom installation: ${error.message}`
-        });
-    }
-});
-
-// GET /api/plugins/template - Get the plugin template
-router.get('/template', (req, res) => {
-    res.json({
-        success: true,
-        data: PLUGIN_TEMPLATE
-    });
-});
-
-// POST /api/plugins/submit - Submit a new plugin
-router.post('/submit', async (req, res) => {
-    try {
-        const plugin = req.body;
-        
-        // Validate required fields
-        const requiredFields = ['id', 'name', 'description', 'category', 'version', 'author'];
-        const missingFields = requiredFields.filter(field => !plugin[field]);
-        
-        if (missingFields.length > 0) {
-            return res.status(400).json({
-                success: false,
-                error: `Missing required fields: ${missingFields.join(', ')}`
-            });
-        }
-
-        // Validate category
-        const validCategories = ['llm', 'rag', 'agents', 'workflows', 'tools'];
-        if (!validCategories.includes(plugin.category)) {
-            return res.status(400).json({
-                success: false,
-                error: `Invalid category. Must be one of: ${validCategories.join(', ')}`
-            });
-        }
-
-        // Validate installation config if provided
+        // Install dependencies if needed
         if (plugin.installConfig) {
-            const validTypes = ['python', 'npm', 'custom'];
-            if (!validTypes.includes(plugin.installConfig.type)) {
-                return res.status(400).json({
-                    success: false,
-                    error: `Invalid installation type. Must be one of: ${validTypes.join(', ')}`
-                });
-            }
-
-            // Validate dependencies or commands based on type
-            if (plugin.installConfig.type !== 'custom' && !plugin.installConfig.dependencies?.length) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Dependencies are required for python and npm installations'
-                });
+            switch (plugin.installConfig.type) {
+                case 'python':
+                    await execAsync(`pip install ${plugin.installConfig.dependencies.join(' ')}`);
+                    break;
+                case 'npm':
+                    await execAsync(`npm install ${plugin.installConfig.dependencies.join(' ')}`);
+                    break;
             }
         }
 
-        // If an icon is provided, ensure the file exists
-        if (plugin.icon && !plugin.icon.startsWith('http')) {
-            const iconPath = path.join(process.cwd(), 'public', plugin.icon);
-            if (!fs.existsSync(iconPath)) {
-                return res.status(400).json({
-                    success: false,
-                    error: 'Icon file not found in public directory'
-                });
-            }
-        }
-
-        // TODO: Save plugin to database or file system
-        // For now, we'll just return success
-        res.json({
-            success: true,
-            message: 'Plugin submitted successfully',
-            data: plugin
+        // Add to database
+        await PluginDatabase.getInstance().addPlugin({
+            id: plugin.id,
+            name: plugin.name,
+            description: plugin.description,
+            version: plugin.version,
+            isActive: true,
+            metadata: JSON.stringify({
+                icon: plugin.icon,
+                category: plugin.category,
+                tags: plugin.tags,
+                links: plugin.links
+            })
         });
+
+        res.json({ success: true });
     } catch (error: any) {
-        res.status(500).json({
-            success: false,
-            error: error.message || 'Failed to submit plugin'
-        });
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Uninstall plugin
+router.post('/:id/uninstall', async (req, res) => {
+    try {
+        const plugin = SAMPLE_PLUGINS.find(p => p.id === req.params.id);
+        if (!plugin) {
+            return res.status(404).json({
+                success: false,
+                error: 'Plugin not found'
+            });
+        }
+
+        // Uninstall dependencies if needed
+        if (plugin.installConfig) {
+            switch (plugin.installConfig.type) {
+                case 'python':
+                    await execAsync(`pip uninstall -y ${plugin.installConfig.dependencies.join(' ')}`);
+                    break;
+                case 'npm':
+                    await execAsync(`npm uninstall ${plugin.installConfig.dependencies.join(' ')}`);
+                    break;
+            }
+        }
+
+        // Remove from database
+        await PluginDatabase.getInstance().deletePlugin(plugin.id);
+
+        res.json({ success: true });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
+    }
+});
+
+// Toggle plugin active state
+router.post('/:id/toggle', async (req, res) => {
+    try {
+        const { isActive } = req.body;
+        await PluginDatabase.getInstance().setPluginActive(req.params.id, isActive);
+        res.json({ success: true });
+    } catch (error: any) {
+        res.status(500).json({ success: false, error: error.message });
     }
 });
 

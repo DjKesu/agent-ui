@@ -37,8 +37,8 @@ router.post('/install-dependencies', async (req, res) => {
 
 router.post('/initialize', async (req, res) => {
     try {
-        // Create data directory if it doesn't exist
-        const dataDir = path.join(process.cwd(), 'data', 'chromadb');
+        // Create data directory in the backend folder
+        const dataDir = path.join(process.cwd(), 'backend', 'data', 'chromadb');
         if (!fs.existsSync(dataDir)) {
             fs.mkdirSync(dataDir, { recursive: true });
         }
@@ -116,6 +116,21 @@ router.post('/embedding-models/set', async (req, res) => {
             success: false,
             error: error.message
         });
+    }
+});
+
+// Test ChromaDB connectivity
+router.get('/test', async (req, res) => {
+    try {
+        // Try to list collections as a simple test
+        const result = await VectorDBService.listCollections();
+        if (result.success) {
+            res.json({ status: 'ok', message: 'ChromaDB is connected and working', collections: result.data });
+        } else {
+            res.status(500).json({ status: 'error', message: result.error });
+        }
+    } catch (error: any) {
+        res.status(500).json({ status: 'error', message: error.message });
     }
 });
 

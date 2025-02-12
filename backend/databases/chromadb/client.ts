@@ -12,13 +12,13 @@ class ChromaDBClient {
     public static async getInstance(): Promise<ChromaClient> {
         if (!ChromaDBClient.instance) {
             try {
-                ChromaDBClient.instance = new ChromaClient({
-                    path: ChromaDBClient.persistentPath
-                });
+                // Create a client that connects to the local HTTP server
+                ChromaDBClient.instance = new ChromaClient();
                 
                 // Test the connection
                 await ChromaDBClient.instance.heartbeat();
                 console.log('ChromaDB connection established successfully');
+                console.log('Using persistent storage at:', ChromaDBClient.persistentPath);
             } catch (error) {
                 console.error('Failed to initialize ChromaDB client:', error);
                 throw error;
