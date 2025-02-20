@@ -4,13 +4,21 @@ import path from 'path';
 import fs from 'fs';
 import vectorDBRoutes from './api/vectordb.routes';
 import pluginsRoutes from './api/plugins.routes';
-import ChromaDBClient from './databases/chromadb/client';
+import ollamaRoutes from './api/ollama.routes';
+import agentsRoutes from './api/agents.routes';
+import ChromaDBClientWrapper from './databases/chromadb/client';
+import OllamaService from './services/ollama.service';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin: ['http://localhost:3000', 'http://localhost:5173'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+}));
 app.use(express.json());
 
 // Serve static files from the public directory
@@ -30,7 +38,7 @@ app.get('/health', (req, res) => {
 // ChromaDB Status endpoint
 app.get('/chromadb/status', async (req, res) => {
     try {
-        const client = await ChromaDBClient.getInstance();
+        const client = await ChromaDBClientWrapper.getInstance();
         
         try {
             await client.heartbeat();
@@ -56,11 +64,39 @@ app.get('/chromadb/status', async (req, res) => {
     }
 });
 
+// Ollama Status endpoint
+app.get('/ollama/status', async (req, res) => {
+    try {
+        const ollamaService = OllamaService.getInstance();
+        try {
+            await ollamaService.checkStatus();
+            res.json({ 
+                status: 'connected',
+                message: 'Ollama service is running'
+            });
+        } catch (error: any) {
+            console.error('Ollama status check error:', error);
+            res.json({ 
+                status: 'disconnected',
+                error: error.message || 'Ollama service is not running',
+                isInstalled: false
+            });
+        }
+    } catch (error: any) {
+        console.error('Ollama service error:', error);
+        res.json({ 
+            status: 'disconnected',
+            error: error.message || 'Failed to connect to Ollama',
+            isInstalled: false
+        });
+    }
+});
+
 // ChromaDB Cleanup endpoint
 app.post('/chromadb/cleanup', async (req, res) => {
     try {
         // Reset the ChromaDB client
-        await ChromaDBClient.resetClient();
+        await ChromaDBClientWrapper.resetClient();
 
         // Remove the data directory
         if (fs.existsSync(dataDir)) {
@@ -85,9 +121,15 @@ app.use('/api/vectordb', vectorDBRoutes);
 // Plugins routes
 app.use('/api/plugins', pluginsRoutes);
 
+// Ollama routes
+app.use('/api/ollama', ollamaRoutes);
+
+// Agents routes
+app.use('/api/agents', agentsRoutes);
+
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-    console.error(err.stack);
+    console.error('Error:', err.stack);
     res.status(500).json({
         success: false,
         error: 'Internal Server Error',

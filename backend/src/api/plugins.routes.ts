@@ -5,6 +5,38 @@ import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs';
 
+interface PluginInstallConfig {
+    type: 'python' | 'npm' | 'built-in' | 'custom';
+    dependencies?: string[];
+    setupCommands?: string[];
+    requiresRestart: boolean;
+}
+
+interface Plugin {
+    id: string;
+    name: string;
+    icon: string;
+    shortDescription: string;
+    description: string;
+    tags: string[];
+    category: 'llm' | 'rag' | 'agents' | 'workflows' | 'tools';
+    version: string;
+    author: string;
+    links: {
+        documentation?: string;
+        github?: string;
+        website?: string;
+    };
+    rating: number;
+    downloads: number;
+    isBuiltIn?: boolean;
+    isPreInstalled?: boolean;
+    status?: string;
+    installConfig?: PluginInstallConfig;
+    isInstalled?: boolean;
+    isActive?: boolean;
+}
+
 const execAsync = promisify(exec);
 const router = express.Router();
 
@@ -35,7 +67,7 @@ const PLUGIN_TEMPLATE = {
 };
 
 // Sample plugin data with installation configurations
-const SAMPLE_PLUGINS = [
+const SAMPLE_PLUGINS: Plugin[] = [
     {
         id: 'chromadb',
         name: 'ChromaDB',
@@ -48,14 +80,18 @@ const SAMPLE_PLUGINS = [
         author: 'Agent UI',
         links: {
             documentation: 'https://docs.trychroma.com/',
-            github: 'https://github.com/chroma-core/chroma'
+            github: 'https://github.com/chroma-core/chroma',
+            website: 'https://www.trychroma.com/'
         },
-        rating: 4.8,
-        downloads: 1234,
+        rating: 5,
+        downloads: 1000,
+        isBuiltIn: true,
+        isPreInstalled: true,
+        status: 'installed',
         installConfig: {
-            type: 'python',
-            dependencies: ['chromadb', 'chromadb-default-embed'],
-            requiresRestart: true
+            type: 'built-in',
+            dependencies: ['chromadb'],
+            requiresRestart: false
         }
     },
     {
@@ -167,14 +203,18 @@ router.get('/:id/status', async (req, res) => {
             try {
                 switch (plugin.installConfig.type) {
                     case 'python':
-                        const result = await execAsync(`pip list | grep ${plugin.installConfig.dependencies[0]}`);
-                        isInstalled = true;
-                        version = result.stdout.match(/\d+\.\d+\.\d+/)?.[0];
+                        if (plugin.installConfig.dependencies?.[0]) {
+                            const result = await execAsync(`pip list | grep ${plugin.installConfig.dependencies[0]}`);
+                            isInstalled = true;
+                            version = result.stdout.match(/\d+\.\d+\.\d+/)?.[0];
+                        }
                         break;
                     case 'npm':
-                        const npmResult = await execAsync(`npm list ${plugin.installConfig.dependencies[0]}`);
-                        isInstalled = !npmResult.stderr;
-                        version = npmResult.stdout.match(/\d+\.\d+\.\d+/)?.[0];
+                        if (plugin.installConfig.dependencies?.[0]) {
+                            const npmResult = await execAsync(`npm list ${plugin.installConfig.dependencies[0]}`);
+                            isInstalled = !npmResult.stderr;
+                            version = npmResult.stdout.match(/\d+\.\d+\.\d+/)?.[0];
+                        }
                         break;
                 }
             } catch (err) {
@@ -218,10 +258,14 @@ router.post('/:id/install', async (req, res) => {
         if (plugin.installConfig) {
             switch (plugin.installConfig.type) {
                 case 'python':
-                    await execAsync(`pip install ${plugin.installConfig.dependencies.join(' ')}`);
+                    if (plugin.installConfig.dependencies?.length) {
+                        await execAsync(`pip install ${plugin.installConfig.dependencies.join(' ')}`);
+                    }
                     break;
                 case 'npm':
-                    await execAsync(`npm install ${plugin.installConfig.dependencies.join(' ')}`);
+                    if (plugin.installConfig.dependencies?.length) {
+                        await execAsync(`npm install ${plugin.installConfig.dependencies.join(' ')}`);
+                    }
                     break;
             }
         }
@@ -262,10 +306,14 @@ router.post('/:id/uninstall', async (req, res) => {
         if (plugin.installConfig) {
             switch (plugin.installConfig.type) {
                 case 'python':
-                    await execAsync(`pip uninstall -y ${plugin.installConfig.dependencies.join(' ')}`);
+                    if (plugin.installConfig.dependencies?.length) {
+                        await execAsync(`pip uninstall -y ${plugin.installConfig.dependencies.join(' ')}`);
+                    }
                     break;
                 case 'npm':
-                    await execAsync(`npm uninstall ${plugin.installConfig.dependencies.join(' ')}`);
+                    if (plugin.installConfig.dependencies?.length) {
+                        await execAsync(`npm uninstall ${plugin.installConfig.dependencies.join(' ')}`);
+                    }
                     break;
             }
         }

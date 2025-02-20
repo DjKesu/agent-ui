@@ -4,7 +4,7 @@
     "module": "commonjs",
     "lib": ["es2018", "esnext.asynciterable"],
     "outDir": "./dist",
-    "rootDir": "./",
+    "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -16,6 +16,6 @@
       "*": ["node_modules/*"]
     }
   },
-  "include": ["./**/*"],
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
 } 
