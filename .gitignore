@@ -113,3 +113,5 @@ typings/
 
 # Electron-Forge
 out/
+
+backend/data/

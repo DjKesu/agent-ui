@@ -3,28 +3,59 @@ import { Handle, Position } from 'reactflow';
 import { Button } from '../../ui/button';
 import { Input } from '../../ui/input';
 import { Label } from '../../ui/label';
+import { Textarea } from '../../ui/textarea';
+import { useToast } from '../../ui/use-toast';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 export function CreateCollectionNode({ data }: { data: any }) {
   const [collectionName, setCollectionName] = useState('');
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const { toast } = useToast();
 
   const handleCreate = async () => {
+    if (!collectionName) {
+      toast({
+        title: "Error",
+        description: "Please enter a collection name",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
-      const response = await fetch(`${API_URL}/api/vectordb/collections`, {
+      const response = await fetch(`${API_URL}/api/vectordb/collections/${collectionName}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: collectionName }),
+        body: JSON.stringify({ metadata: { source: 'workflow' } }),
       });
       
-      if (response.ok) {
+      const data = await response.json();
+      
+      if (data.status === 'success') {
         setStatus('success');
+        toast({
+          title: "Success",
+          description: `Collection "${collectionName}" created successfully`,
+        });
+        if (data.onChange) {
+          data.onChange(collectionName);
+        }
       } else {
         setStatus('error');
+        toast({
+          title: "Error",
+          description: data.error || "Failed to create collection",
+          variant: "destructive"
+        });
       }
-    } catch (error) {
+    } catch (error: any) {
       setStatus('error');
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create collection",
+        variant: "destructive"
+      });
     }
   };
 
@@ -60,11 +91,20 @@ export function TestCollectionNode({ data }: { data: any }) {
   const [collectionName, setCollectionName] = useState('');
   const [testText, setTestText] = useState('');
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const { toast } = useToast();
 
   const handleTest = async () => {
+    if (!collectionName || !testText) {
+      toast({
+        title: "Error",
+        description: "Please enter both collection name and test text",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
-      // First add a test document
-      const addResponse = await fetch(`${API_URL}/api/vectordb/collections/${collectionName}/documents`, {
+      const response = await fetch(`${API_URL}/api/vectordb/collections/${collectionName}/documents`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -76,13 +116,29 @@ export function TestCollectionNode({ data }: { data: any }) {
         }),
       });
 
-      if (addResponse.ok) {
+      const data = await response.json();
+      
+      if (data.status === 'success') {
         setStatus('success');
+        toast({
+          title: "Success",
+          description: "Test document added successfully",
+        });
       } else {
         setStatus('error');
+        toast({
+          title: "Error",
+          description: data.error || "Failed to add test document",
+          variant: "destructive"
+        });
       }
-    } catch (error) {
+    } catch (error: any) {
       setStatus('error');
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add test document",
+        variant: "destructive"
+      });
     }
   };
 
@@ -101,14 +157,14 @@ export function TestCollectionNode({ data }: { data: any }) {
         </div>
         <div className="space-y-2">
           <Label>Test Text</Label>
-          <Input 
+          <Textarea 
             value={testText}
             onChange={(e) => setTestText(e.target.value)}
             placeholder="Enter text to store"
           />
         </div>
         <Button onClick={handleTest} className="w-full">
-          Test Collection
+          Add Test Document
         </Button>
         {status === 'success' && (
           <p className="text-sm text-green-500">Test document added successfully!</p>

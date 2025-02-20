@@ -8,7 +8,7 @@ import FlowBuilder from './components/flow/FlowBuilder';
 import ToolsPage from './components/tools/ToolsPage';
 import { PluginStore } from './components/store/PluginStore';
 import DashboardPage from './components/dashboard/DashboardPage';
-import { DataStore } from './components/datastore/DataStore';
+import { Toaster } from './components/ui/toaster';
 import './styles/globals.css';
 
 interface PlaceholderPageProps {
@@ -41,9 +41,9 @@ const App: React.FC = () => (
         <Route path="frameworks" element={<PlaceholderPage title="LLM Frameworks" />} />
         <Route path="models" element={<PlaceholderPage title="Models" />} />
         <Route path="settings" element={<PlaceholderPage title="Settings" />} />
-        <Route path="data-store" element={<DataStore />} />
       </Route>
     </Routes>
+    <Toaster />
   </BrowserRouter>
 );
 
